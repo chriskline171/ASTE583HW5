@@ -1,0 +1,55 @@
+function H = calculateH_rho_rhoDot_wrt_r_v(X, GS, phi_G)
+% calculateH_rho_rhoDot_wrt_r_v
+% Computes the measurement Jacobian H for scalar range (rho) and range-rate (rhoDot)
+% with respect to the target state [r; v] in ECI.
+%
+% Inputs:
+%   X    : 6x1 target state in ECI  [r; v] = [x; y; z; vx; vy; vz]
+%   GS   : ground station struct with fields:
+%          - LatDeg : latitude  [deg]
+%          - LonDeg : longitude [deg]
+%          - R      : (optional) station radius from Earth's center [m]
+%   phi_G: Greenwich sidereal angle (or equivalent) at measurement time [rad]
+%
+% Output:
+%   H    : 2x6 Jacobian matrix
+%          Row 1: drho/dr   drho/dv
+%          Row 2: drhoDot/dr drhoDot/dv
+%%
+% Use station radius if provided, otherwise default to Earth radius
+if isfield(GS,'R')
+    r_GS = GS.R;
+else
+    r_GS = getConstants().Earth.Re;
+end
+
+% Station latitude
+lat = GS.LatDeg  * getConstants().Conversions.deg2rad;
+% Local sidereal longitude
+lon_lst = GS.LonDeg  * getConstants().Conversions.deg2rad + phi_G;
+
+% Ground station states in ECI frame
+r_GS_ECI = r_GS*[cos(lon_lst)*cos(lat); sin(lon_lst)*cos(lat); sin(lat)];
+v_GS_ECI = cross([0;0;getConstants().Earth.omega], r_GS_ECI);
+
+% Extract target position and velocity from state vector
+r = X(1:3);
+v = X(4:6);
+
+% Relative line-of-sight (LOS) vector: target relative to station
+rho_vec = r - r_GS_ECI;
+rho = norm(rho_vec);
+% Relative velocity vector between target and station
+v_rel = v - v_GS_ECI;
+
+% Partial of rho
+drho_dr = (rho_vec/rho)';
+drho_dv = zeros(1,3);
+
+% Partial of rhoDot
+drhoDot_dr = (1/rho)*(v_rel)' - (1/rho^3) * (rho_vec)' * ((rho_vec)'*(v_rel));
+drhoDot_dv = (1/rho)*(rho_vec)';
+
+% Assemble H
+H = [drho_dr,    drho_dv, drho_drgs, drho_dvgs;...
+     drhoDot_dr, drhoDot_dv];
