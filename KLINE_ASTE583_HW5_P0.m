@@ -43,12 +43,12 @@ options = odeset('RelTol',1e-10,'AbsTol',1e-10);
 phi_G0 = 170*getConstants().Conversions.deg2rad;
 
 %% Batch filter (Gauss–Newton on initial state)
-delta_x_hat = zeros(6,1);            % correction vector
+delta_x_hat = [0.541708589833822;0.215276743995227;-0.0246521235406893;-5.6364922705741e-5;-0.000394199357037521;0.00051130212438399]*getConstants().Conversions.km2m;            % correction vector
 delta_x_bar = delta_x_hat;
 firtIteration = true;
 kk = 0;
-maxIterLimit = 10;
-while delta_x_hat'*(P0\delta_x_hat)>1e-15 || firtIteration
+maxIterLimit = 15;
+while delta_x_hat'*(P0\delta_x_hat)>1e-10 || firtIteration
     firtIteration = false;
     X0(1:6) = X0(1:6) + delta_x_hat;      % update initial state guess
 
@@ -67,6 +67,7 @@ while delta_x_hat'*(P0\delta_x_hat)>1e-15 || firtIteration
     end
 
     delta_y = nan(length(indxStart:indxEnd),4);  % [t, stnID, drho, drhodot]
+    epsilon_hat= nan(length(indxStart:indxEnd),2);
     phi_G = getConstants().Earth.omega*t + phi_G0;
     stationNames = fieldnames(Stations);
 
@@ -100,12 +101,20 @@ while delta_x_hat'*(P0\delta_x_hat)>1e-15 || firtIteration
         InfoMat = InfoMat + H'*(R\H);
         InfoVec = InfoVec + H'*(R\delta_y(nn,3:4)');
 
+        % Postfit Residual
+        epsilon_hat(nn,:) = delta_y(nn,3:4) - (H*delta_x_hat)';
+
         nn = nn + 1;
     end
 
     delta_x_hat = InfoMat \ InfoVec;   % Gauss-Newton update
     delta_x_bar = delta_x_bar - delta_x_hat; % Update a priori state deviation
+
     kk = kk + 1;
+
+    Residual{kk}.Prefit  = delta_y(:,3:4);
+    Residual{kk}.Postfit = epsilon_hat;
+
     if kk>maxIterLimit
          warning(['Batch filter did not converge within %d iterations.\n' ...
              'Last step Mahalanobis norm: %.3e\n'], ...
@@ -116,3 +125,24 @@ end
 kk
 %% Final post-fit difference from OE-based initial state
 delta_x_postfit = X0(1:6) - [r0_ECI; v0_ECI];
+
+figure(1)
+figure(2)
+for ii = 1:kk
+    for jj = 1:2
+        figure(jj)
+        subplot(kk, 2, 2*ii-1)
+        plot(t(indxStart:indxEnd), Residual{ii}.Prefit(:,jj), 'o')
+        title(['Prefit Residual Range', num2str(ii)])
+        grid on
+    
+        subplot(kk, 2, 2*ii)
+        plot(t(indxStart:indxEnd), Residual{ii}.Postfit(:,jj), 'o')
+        title(['Postfit Residual Range', num2str(ii)])
+        grid on
+    end
+end
+figure(1)
+sgtitle('Range Pre and Postfit Residual')
+figure(2)
+sgtitle('Range Rate Pre and Postfit Residual')
