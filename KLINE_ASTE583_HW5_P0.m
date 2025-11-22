@@ -1,3 +1,4 @@
+clear all
 %% Ground station definitions
 Stations.One.LatDeg    = -35.398333;
 Stations.One.LonDeg    = 148.981944;
