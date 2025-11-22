@@ -1,3 +1,5 @@
+clc; clear all; close all
+
 %% Ground station definitions
 Stations.One.LatDeg    = -35.398333;
 Stations.One.LonDeg    = 148.981944;
@@ -44,13 +46,19 @@ phi_G0 = 170*getConstants().Conversions.deg2rad;
 
 %% Batch filter (Gauss–Newton on initial state)
 delta_x_hat = [0.541708589833822;0.215276743995227;-0.0246521235406893;-5.6364922705741e-5;-0.000394199357037521;0.00051130212438399]*getConstants().Conversions.km2m;            % correction vector
-delta_x_bar = delta_x_hat;
+delta_x_bar = zeros(size(delta_x_hat));
 firtIteration = true;
 kk = 0;
 maxIterLimit = 15;
-while delta_x_hat'*(P0\delta_x_hat)>1e-10 || firtIteration
+MalhonbisDist =  delta_x_hat'*(P0\delta_x_hat);
+while MalhonbisDist>1e-10 || firtIteration
     firtIteration = false;
+    kk = kk + 1;
     X0(1:6) = X0(1:6) + delta_x_hat;      % update initial state guess
+    IterationData{kk}.X0 = X0(1:6);
+    IterationData{kk}.delta_x_hat = delta_x_hat;
+    IterationData{kk}.MalhonbisDist = MalhonbisDist;
+    IterationData{kk}.delta_x_bar = delta_x_bar;
 
     [t,X] = ode45(@twobodyEOMJ2WithSTM, tspan, X0, options);
 
@@ -107,15 +115,16 @@ while delta_x_hat'*(P0\delta_x_hat)>1e-10 || firtIteration
         nn = nn + 1;
     end
 
+    IterationData{kk}.Prefit  = delta_y(:,3:4);
+    IterationData{kk}.Postfit = epsilon_hat;
+    IterationData{kk}.InfoMat = InfoMat;
+    IterationData{kk}.InfoVec = InfoVec;
+
     delta_x_hat = InfoMat \ InfoVec;   % Gauss-Newton update
+    MalhonbisDist =  delta_x_hat'*(P0\delta_x_hat);
     delta_x_bar = delta_x_bar - delta_x_hat; % Update a priori state deviation
 
-    kk = kk + 1;
-
-    Residual{kk}.Prefit  = delta_y(:,3:4);
-    Residual{kk}.Postfit = epsilon_hat;
-
-    if kk>maxIterLimit
+    if kk>=maxIterLimit
          warning(['Batch filter did not converge within %d iterations.\n' ...
              'Last step Mahalanobis norm: %.3e\n'], ...
              maxIterLimit, delta_x_hat'*(P0\delta_x_hat));
@@ -132,12 +141,12 @@ for ii = 1:kk
     for jj = 1:2
         figure(jj)
         subplot(kk, 2, 2*ii-1)
-        plot(t(indxStart:indxEnd), Residual{ii}.Prefit(:,jj), 'o')
+        plot(t(indxStart:indxEnd), IterationData{ii}.Prefit(:,jj), 'o')
         title(['Prefit Residual Range', num2str(ii)])
         grid on
     
         subplot(kk, 2, 2*ii)
-        plot(t(indxStart:indxEnd), Residual{ii}.Postfit(:,jj), 'o')
+        plot(t(indxStart:indxEnd), IterationData{ii}.Postfit(:,jj), 'o')
         title(['Postfit Residual Range', num2str(ii)])
         grid on
     end
