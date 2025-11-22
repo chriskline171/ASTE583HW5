@@ -47,12 +47,12 @@ phi_G0 = 170*getConstants().Conversions.deg2rad;
 %% Batch filter (Gauss–Newton on initial state)
 delta_x_hat = [0.541708589833822;0.215276743995227;-0.0246521235406893;-5.6364922705741e-5;-0.000394199357037521;0.00051130212438399]*getConstants().Conversions.km2m;            % correction vector
 delta_x_bar = zeros(size(delta_x_hat));
-firtIteration = true;
+firstIteration = true;
 kk = 0;
 maxIterLimit = 15;
 MalhonbisDist =  delta_x_hat'*(P0\delta_x_hat);
-while MalhonbisDist>1e-10 || firtIteration
-    firtIteration = false;
+while MalhonbisDist>1e-10 || firstIteration
+    firstIteration = false;
     kk = kk + 1;
     X0(1:6) = X0(1:6) + delta_x_hat;      % update initial state guess
     IterationData{kk}.X0 = X0(1:6);
